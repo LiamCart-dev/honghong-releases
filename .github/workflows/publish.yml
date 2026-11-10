@@ -1,0 +1,81 @@
+name: 发布安装包
+
+on:
+  push:
+    branches: ['upload/v*']
+
+permissions:
+  contents: write
+
+# stable 和 dev 共享 version.json，发布必须串行。
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: 读取上传产物
+        uses: actions/checkout@v4
+        with:
+          path: upload
+
+      - name: 读取最新清单和发布脚本
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: manifest
+
+      - name: 校验产物和版本递增
+        id: release
+        env:
+          UPLOAD_REF: ${{ github.ref_name }}
+        run: |
+          python3 manifest/prepare_release.py \
+            --upload upload \
+            --manifest manifest/version.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --ref "$UPLOAD_REF" \
+            --output "$RUNNER_TEMP/release" >> "$GITHUB_OUTPUT"
+
+      - name: 拒绝已有标签或 Release
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          tags=$(git -C manifest ls-remote --tags origin "refs/tags/$TAG")
+          if [ -n "$tags" ]; then
+            echo "::error::$TAG 已存在，禁止覆盖"; exit 1
+          fi
+          releases=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name')
+          if printf '%s\n' "$releases" | grep -Fxq "$TAG"; then
+            echo "::error::$TAG 已有 Release（包括草稿），请先检查部分发布状态"; exit 1
+          fi
+
+      - name: 创建含完整资产的草稿并公开发布
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          APK: ${{ steps.release.outputs.apk }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: |
+          latest=true
+          if [ "$PRERELEASE" = true ]; then latest=false; fi
+          gh release create "$TAG" "$APK" "$RUNNER_TEMP/release/meta.json" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$TAG" --notes-file "$RUNNER_TEMP/release/notes.md" \
+            --draft --prerelease="$PRERELEASE" --latest="$latest"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest="$latest"
+
+      - name: 更新旧版客户端和下载站清单
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        working-directory: manifest
+        run: |
+          cp "$RUNNER_TEMP/release/version.json" version.json
+          git config user.name honghong-ci
+          git config user.email ci@honghong.invalid
+          git add version.json
+          git commit -m "发布 $TAG"
+          git push origin HEAD:main
