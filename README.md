@@ -1,6 +1,8 @@
 # 哄哄公开发布仓库
 
-此目录是独立公开仓库的完整模板，拟使用 `LiamCart-dev/honghong-releases`，默认分支为 `main`。源码继续保存在私有仓库 `LiamCart-dev/honghong`。公开仓库只接收发布流程、APK、发布说明与元数据。
+公开发布仓库为 `LiamCart-dev/honghong-releases`，默认分支为 `main`。源码继续保存在私有仓库 `LiamCart-dev/honghong`。公开仓库只接收发布流程、APK、发布说明与元数据。
+
+仓库与 `honghong-source-ci` 可写 Deploy Key 已配置；源码仓库已设置 `RELEASES_REPO` 变量与 `RELEASES_DEPLOY_KEY` secret。首次发版仍需提交源码中的接入改动，并补齐原 Android 正式签名及云端配置。
 
 ## 初始化与连接
 
@@ -71,6 +73,6 @@ python3 backend/android-builder/import-release \
 
 失败后先检查目标标签、Release 草稿 / 公开状态、两个资产与 `main/version.json`。资产上传可能留下草稿；Release 已公开后也可能因 `main` 分支保护或并发修改而未更新清单。这些情况不自动重试、不自动删除或重新创建 Release。若 Release 已完整公开但清单未更新，应比对资产里的 meta 与最新 main，在明确确认后仅补齐清单；若产物错误，使用更高 `versionCode` 的新版本修复。不要 Re-run 已开始发布的旧版本来覆盖同名资产。
 
-模板兼容旧清单格式，但不能更改已安装客户端内写死的 GitHub 仓库地址。历史入口 `JiHe021499/honghong-releases` 与拟用的 `LiamCart-dev/honghong-releases` 均曾返回 404；新建后者不会让前者自动恢复。指向旧地址的已安装版本需要恢复原入口或手动安装同签名的新版本。旧下载站的同步源 `HH_SRC` 和浏览器 GitHub 备用地址也应在部署时改成实际公开仓库，否则仍会读取旧地址。
+模板兼容旧清单格式，但不能更改已安装客户端内写死的 GitHub 仓库地址。历史入口 `JiHe021499/honghong-releases` 已不可用；`LiamCart-dev/honghong-releases` 不会让旧入口自动恢复。指向旧地址的已安装版本需要恢复原入口或手动安装同签名的新版本。旧下载站的同步源 `HH_SRC` 和浏览器 GitHub 备用地址也应在部署时改成实际公开仓库，否则仍会读取旧地址。
 
 本地验证：Python 3.11+ 运行 `python3 -m unittest discover -s backend/releases-repository/tests`；发布工作流在 GitHub 的 Ubuntu runner 使用系统 Python 3。
